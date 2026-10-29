@@ -1,5 +1,7 @@
 # Style families: measure → prompt → generate → post → engine
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 Classify the reference into a family, measure it, and write the style bible (`art.md` §2) from those measurements. Each family below lists what its bible must pin down; fill every item with measured values, in your own wording, then use that one wording verbatim on every call. Attach the reference image to every call. The families are starting points: a reference that sits between families, or one you can't place, is a question for the user. The notes say what each stage of the pipeline must achieve for the family; how to achieve it is decided per project, with the reference in hand.
 
 The bible holds **style only**. Background, isolation and composition never go in it. `gen.py prepare` adds the background line per asset from its alpha mode (real transparency, or opaque as the asset prompt describes it, e.g. on the paper colour), and the asset's own prompt carries the composition. Isolation wording in the bible leaks into every job, and sky and band jobs come back "isolated, no scenery".

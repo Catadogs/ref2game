@@ -1,5 +1,7 @@
 # Game feel and a living world
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 **Diagnosis.** A scene reads as a "static picture" for three reasons:
 - **(a) The camera never moves,** so parallax layers collapse into one painting.
 - **(b) Nothing has a cause:** every motion is an independent loop.
@@ -49,7 +51,7 @@ The template's `sim.js` holds these as constants in `K` (`K.COYOTE`, `K.BUFFER`,
 - **Squash and stretch** on a soft or round hero: stretch along the motion at take-off, squash on landing scaled by fall speed, recover on an underdamped spring (a visible bounce or two). Keep the volume roughly constant (x and y scale inversely), and only as much as the art style tolerates.
 - **Landing feedback stack, in order:** squash → dust (more if hard) → nearby grass flattens → platform dips → leaves drop → shake if hard.
 
-Put feel-only options behind a play-mode flag (`S.vj`) so the tuned attract demo stays valid. Verify with `livecheck.mjs --keys` scripts: press jump just after leaving a ledge and just before landing, tap and hold jump, and read the results with `--eval`; then let the game critic play it (`critics.md`).
+Put feel-only options behind a play-mode flag (`S.vj`) so the tuned attract demo stays valid. Verify with `livecheck.mjs --keys` scripts: press jump just after leaving a ledge and just before landing, tap and hold jump, and enforce the expected result with `--assert` or a scenario; use `--eval` only for diagnostics; then let the game critic play it (`critics.md`).
 
 ## 2. Camera
 
@@ -61,7 +63,7 @@ Patterns from Itay Keren's "Scroll Back":
 - **Idle breathing.** A small, slow drift, on a period that matches no other loop: felt, not seen.
 - **Shake.** Added on top, never fed into the follow.
 
-Verify with `livecheck.mjs --shots` across a run: the hero sits ahead of centre while moving, the layers separate, and no edge of framing art shows at the clamp limits.
+Verify with `livecheck.mjs --smoke --shots` across a run: the hero sits ahead of centre while moving, the layers separate, and no edge of framing art shows at the clamp limits.
 
 ## 3. Reactive world: patterns (all in the sim, deterministic)
 

@@ -1,11 +1,11 @@
 # Critics: independent agents check every stage, fast
 
-An author judging their own work misses what the user sees at once. Weak parts then surface in the assembled frame, or worse, the user finds them first. So every piece gets an **independent critic subagent** before it is used. Critics run **in parallel with production** and never block the live preview.
+An author judging their own work misses what the user sees at once. Weak parts then surface in the assembled frame, or worse, the user finds them first. Use **independent critic subagents** at substantial review gates, batching related assets. Small fixes can use focused self-review. Reviews never block showing progress; collect applicable results before final delivery.
 
 **Codex runtime.** Critics are subagents started with `collaboration.spawn_agent`, within the available concurrency slots; continue them with `collaboration.send_message` (running) or `collaboration.followup_task` (idle). If delegation is unavailable, the lead runs the same checks itself and labels the report self-review. Codex can't send a message after its turn ends: progress updates may show the live build at once, but critic results are collected and folded in before the turn's final message; never promise a later message.
 
 ## Contents
-0. Automatic checks first, critics always, and the polish checklist
+0. Applicable checks and the polish checklist
 1. Rules for every critic
 2. Asset critic (each generated asset or sheet)
 3. Module critic (a finished system: hero rig, backdrop, water, critters…)
@@ -19,11 +19,11 @@ An author judging their own work misses what the user sees at once. Weak parts t
 
 ---
 
-## 0. Automatic checks first, critics always, and the polish checklist
+## 0. Applicable checks and the polish checklist
 
-- **`qa.mjs` before any critic and before any hand-back** (cheap, objective; `engine.md` §7 QA hooks). A failing qa is fixed first; critics never spend a round on what a script can find.
-- **Critics are not on request, and never in the way.** Gate A: asset, frame and fidelity critics. Rigs: motion critic. Gate B and final: frame, fidelity, motion and game critics. Launch them in the background as soon as the thing exists and keep working; don't wait for them to show the user progress (§9). Their fixes go into the next iteration; their scores go into the hand-back, collected before the turn's final message. One critic per gate and subject, a batch per call, max 3 rounds (the fidelity critic's rounds follow §5a).
-- **The polish checklist** (the "shipped game, not AI slop" bar). Every frame and game critic goes through all of it and reports each item as pass/fail with a crop:
+- **Applicable automatic checks before review and delivery** (`validation.md`; browser QA is not required for an assets-only task). A failing qa is fixed first; critics never spend a round on what a script can find.
+- **Select reviews by scope.** Assets: asset review. Prototype: interaction review. Polished scene: frame and game review; exact matching adds fidelity review; articulated rigs add motion review. Launch them in the background as soon as the thing exists and keep working; don't wait for them to show the user progress (§9). Their fixes go into the next iteration; their scores go into the hand-back, collected before the turn's final message. One critic per gate and subject, a batch per call, max 3 rounds (the fidelity critic's rounds follow §5a).
+- **The polish checklist** (the "shipped game, not AI slop" bar). For each applicable item report pass/fail with evidence; mark irrelevant items not applicable. Prototype scope and simple reference styles do not require every polish feature:
   1. **One rendering family.** The pipeline matches the reference's (true low-res vs HD pixel vs painterly…, `styles.md`): type, light falloff and sprite edges measured on same-scale crops. Nothing blockier or blurrier than the reference.
   2. **One texel density.** Every sprite shows art pixels (or brush/line weights) at the same size on screen; no sprite scaled by a different factor than its neighbours (mixels).
   3. **One outline weight and one light direction** across sprites, props, rigs and code-drawn pieces (code-drawn limbs, wires and particles get the same ink treatment as the art).
@@ -40,7 +40,7 @@ An author judging their own work misses what the user sees at once. Weak parts t
 
 ## 1. Rules for every critic
 
-- **Independence.** A fresh subagent (`collaboration.spawn_agent`), never the author and never the lead's own eye; only when delegation is unavailable does the lead run it, labelled self-review. It does not edit project code. It writes `study/critique/<subject>_rN.md` and replies with a short summary.
+- **Independence.** Use a fresh subagent (`collaboration.spawn_agent`) for a selected independent gate. Focused author review or unavailable delegation is labelled self-review, never independent review. It does not edit project code. It writes `study/critique/<subject>_rN.md` and replies with a short summary.
 - **Same scale.** It builds its own side-by-sides: the reference crop scaled to our render scale next to our crop, both magnified. It judges those, never downscaled wholes (`compare.py side|grid|report`, `sheet.py`).
 - **It measures, doesn't guess.** Colours sampled at matching points, value and chroma percentiles per region, line widths, proportions, timing in frames (§7).
 - **Blunt brief.** "What makes this read as cheap, generated or a static picture instead of the reference/a shipped game, and exactly how do we close the gap in code or in the prompt?"
@@ -141,7 +141,7 @@ Its fixes name the module and the change.
 
 ## 5a. Fidelity critic (near-identical to the reference, measured)
 
-The default bar (`SKILL.md` principle 8): a viewer who glances from the reference to our `match` frame should see the same picture. The frame critic asks "does it read like a shipped game"; this one asks "where, exactly, does it differ from THE reference", and measures every answer.
+Use this critic for `fidelity: exact` only. Its bar: a viewer who glances from the reference to our `match` frame should see the same picture. The frame critic asks "does it read like a shipped game"; this one asks "where, exactly, does it differ from THE reference", and measures every answer.
 
 **Inputs:**
 - `frames/qa/match.png` (the `match` state of `SCENE.QA()`: the reference's composition restaged from `study/MATCH.md`, same camera, scale and HUD values) and, when the reference is a video, matching beats;
@@ -168,7 +168,7 @@ The critic states the tolerance it judged each axis against and reports every ga
 
 **Output:** scores 1–10 per axis (10 = indistinguishable at a glance), then the **top fixes ranked by visible gap**, each with the measured gap (ours vs reference), WHERE (file/function or asset), and the concrete change (the code change, or a regenerate/edit prompt with the reference crop attached). Also list what cannot be matched with the current approach and what would close it (new asset, new effect).
 
-**Rounds:** one per gate by default. After applying a round's fixes, show the user the result (match frame beside the reference, scores, remaining gaps as numbers) and ask whether to keep polishing or stop; further rounds (up to 5, an exception to §1's 3) only on the user's go-ahead. Stop early when no axis has a gap a viewer would notice at a glance. Run it in the background; never block the live page on it.
+**Rounds:** one per gate by default, up to three per subject within the authorized scope. Show the match comparison and remaining gaps, fix acceptance failures, and deliver when the agreed result is reached. Ask only if additional work expands scope or needs an unresolved consequential choice.
 
 **Pitfalls it exists to catch:** a "same style" frame with a different camera height or zoom; a lit-up scene where the reference is low-key (or the reverse); light pools of a different size or colour; generic generated designs instead of the reference's characters; a HUD rebuilt from memory instead of measured; layout drift (an element on the wrong side of the frame).
 
@@ -177,7 +177,7 @@ The critic states the tolerance it judged each axis against and reports every ga
 The critic that answers the user's real question.
 
 **Inputs:**
-- `livecheck.mjs` runs with key scripts it designs: walk into every object, jump on everything, idle long enough to see loops repeat, wait for the world's shared causes (a gust…);
+- `livecheck.mjs` runs with assertion-based scenarios it designs (validation.md): walk into every object, jump on everything, idle long enough to see loops repeat, wait for the world's shared causes (a gust…);
 - `livecheck.mjs` screenshots and `render.mjs stills` of the attract loop;
 - `gamefeel.md`.
 
@@ -229,7 +229,7 @@ Round <N> of max <3, or the fidelity limit in critics.md §5a>. Previous report:
 
 - **Critics run in the background while production continues.** The lead keeps generating and wiring the next module; fixes land between iterations.
 - **Batch assets** into one sheet per critic call. Use one module critic per module, not per file.
-- **Don't wait for a critic to show the user progress.** The live page always shows the current state. Critics gate *assembly* and *hand-back*, not iteration.
+- **Don't wait for a critic to show the user progress.** The live page always shows the current state. Applicable reviews inform final acceptance, not whether progress may be shown.
 - **3 rounds maximum** (fidelity: §5a). Report leftovers instead of looping.
 - **Self-check first** (cheap): sheets, crops, `livecheck`. Then the critic (expensive).
 - **Big gates go to the user:** the first frame, the "alive" pass, final. Critic scores are included in the hand-back: progress updates show the live build without waiting, and the critic results are folded in before the turn's final message (Codex can't message after its turn ends).

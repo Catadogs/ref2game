@@ -5,3 +5,9 @@ __pycache__/
 # installed on first run by setup.sh
 node_modules/
 package-lock.json
+
+# Codex fork: commit the tested dependency lock, ignore generated projects.
+!codex/scripts/package-lock.json
+work/
+dist/
+.venv/

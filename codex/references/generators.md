@@ -55,7 +55,7 @@ Outputs:
 
 ## (c) The first asset is the capability probe
 
-There is no throwaway probe and no budget question (there is no per-image cost). The first production asset,
+Avoid throwaway probes. Do not promise pricing, quotas or availability. The first production asset,
 the one the first frame needs most, doubles as the probe. Each risk is tested by the first production asset
 that carries it: the first sprite (alpha), the first part sheet (sheet discipline and gutters), the first wide
 band (the returned aspect and the crop). Judge each when it lands and write the verdict into `study/GENERATOR.md`:

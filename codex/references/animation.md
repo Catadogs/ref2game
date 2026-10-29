@@ -1,13 +1,15 @@
 # Animation: cut-out rigs and procedural motion for generated characters
 
-**The bar is a finished, shipped game.** Players judge animation in the first seconds of a clip. Animate the way
+**Applicability:** this reference covers articulated cut-out rigs. Use it only for objects assigned that technique in PLAN.md. Sprite sheets, procedural segmented motion, simple UI transitions and static art are valid alternatives; they do not require joint traces. The motion list below is a menu for planned actions, not a demand to add actors or verbs.
+
+**For a polished rig,** Players judge animation in the first seconds of a clip. Animate the way
 UbiArt/Rayman, Spine and DragonBones games do: **painted parts, a skeleton, authored pose curves and procedural secondary
 motion**. A rig reaches the bar when its parts are good (a part sheet, or an anchor drawn in a real rig pose: §1, §12),
 its layering is right per view (§3), its poses are authored (§4), and it passes the measured checks of §14. Judge a rig
 by those checks and by frame-by-frame sheets (§10), never by a glance at the live page.
 
-- **Every actor animates: the player, enemies, every NPC and every animal** (the animation list, §13).
-- **Never animate an action by transforming a whole sprite** (rotate, scale, squash, bob, sway). A worker who "works" by
+- **Animate the actors and actions included in the acceptance contract** (the animation list, §13).
+- **Do not substitute a whole-sprite transform for an agreed articulated action** (rotate, scale, squash, bob, sway). A worker who "works" by
   tilting, an animal that "grazes" by swaying, or a guard who "stabs" by sliding forward reads as no animation at all.
   Whole-sprite transforms are seasoning on top of a rig (a breath, a brief impact squash, a hit shake); `qa.mjs` fails a
   loop whose joints only move rigidly together.
@@ -205,7 +207,7 @@ Never judge animation from a single still or from memory. For every changed moti
   blade at the sky for targets straight below. Stage every attack against targets all round, densely enough that no
   direction band is skipped, and measure the blade against the target at the impact frame (§14).
 - **Only the player was animated.** NPCs "worked" by tilting the whole sprite, a worker turned his back to his station to
-  face the player, animals only swayed, and nobody walked. Every actor in the animation list (§13) gets a rig with real
+  face the player, animals only swayed, and nobody walked. Every actor assigned a cut-out rig in the animation list (§13) gets real
   joints, and workers keep facing their station (§13).
 - **Rounds of rig fixes kept missing defects a viewer saw at once** (a limp, boots in the ground, a blade pointing away at
   the hit, popping deaths). The checks were a glance and one limb-motion number. Measure every rig with the §14 checks on
@@ -247,7 +249,7 @@ The user reads a sprite that glides, or bobs, as "the legs don't move". Every wa
 
 ## 13. The animation list: every actor, NPC and animal life
 
-Write the list into `study/PLAN.md` before rigging, one row per actor type and view, and give every row a rig:
+Write the list into `study/PLAN.md` before rigging, one row per selected actor type and view, with its technique and required actions. The following are possible motions for articulated actors; implement only the agreed ones:
 
 | actor | motions |
 |---|---|
@@ -255,9 +257,9 @@ Write the list into `study/PLAN.md` before rigging, one row per actor type and v
 | **enemies** | idle or patrol; walk; attack; hit; death |
 | **NPCs** | a work or idle loop that fits the role (a worker at a station, a vendor handling goods, a guard shifting weight and scanning, a child playing), with the arms, head and torso moving at their joints; a walk for every NPC with a routine; a talk gesture |
 | **animals, critters** | an idle loop that fits the species (feeding, looking around, resting), with neck/head, ears and tail as parts; a walk if it moves; a startle |
-| **props alive in shipped games** | flags, doors, chests opening, fire, wheels and mechanisms: parts or a shader, never a static sprite |
+| **props alive in shipped games** | flags, doors, chests opening, fire, wheels and mechanisms: parts, frames or a shader when motion is required |
 
-- **Rig pose for every actor that moves**, NPCs and animals included: generate their anchors (or part sheets) with free
+- **Rig pose for every actor assigned a cut-out rig**, NPCs and animals included: generate their anchors (or part sheets) with free
   limbs (§1). A drawing whose arms are painted over the body can't be rigged; regenerate it instead of faking motion.
 - **Workers face their workstation and keep working.** Only idle or talking NPCs turn toward the player. A worker's drawing
   faces the station (put the station in the anchor prompt so the pose fits it).

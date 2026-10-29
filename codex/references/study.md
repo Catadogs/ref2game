@@ -1,5 +1,7 @@
 # Studying the reference (time-boxed; parallel agents for video)
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 The study turns the reference into decisions and numbers: what game this is, how it is layered, what every asset is, what moves and what reacts. The look comes from measurements, never from defaults. Keep it short and actionable; the live page is where quality is won.
 
 ## Contents
@@ -71,7 +73,7 @@ This is the production plan. Everything later is checked against it.
 4. **Interaction inventory.** Every object the player can touch or come near, and how it answers (`gamefeel.md` §3): plants part, hanging things swing, platforms sag, critters flee, lamps sway, pads bounce, enemies can be stomped. Pick what this world has. If you're unsure which reactions the user wants, offer them as options.
 5. **Level as data.** Walk lines, a tile grid, a board or hotspots; goals and pickups where the play leads; an attract route. Never paint a level as one image and reverse-engineer it.
 6. **Beats for the attract demo.** A short looping route that shows the best interactions and returns to the start (checked headless by `live/tune.cjs`).
-7. **Match layout → `study/MATCH.md`** (fidelity is the default bar, `SKILL.md` principle 8). Decompose the reference into a stageable layout, in reference px with a box per element: the camera (view centre, scale: px per character height), every set piece, prop, light (centre, radius, colour), actor (type, facing, pose, state), decal cluster, effect in flight (explosion, beam, tracers, flying bodies) and HUD element (box, font feel, colour, value shown). Build the level so that this composition **is** its first screen (world = camera origin + ref px × view/ref scale), and add a `['match', state]` entry to `SCENE.QA().states` that stages the moment (HUD values, actors, effects at the right age). `qa.mjs` then renders `frames/qa/match.png` for the fidelity critic (`critics.md` §5a).
+7. **Match layout → `study/MATCH.md`** (only for `fidelity: exact`; style mode does not require identical composition). Decompose the reference into a stageable layout, in reference px with a box per element: the camera (view centre, scale: px per character height), every set piece, prop, light (centre, radius, colour), actor (type, facing, pose, state), decal cluster, effect in flight (explosion, beam, tracers, flying bodies) and HUD element (box, font feel, colour, value shown). Build the level so that this composition **is** its first screen (world = camera origin + ref px × view/ref scale), and add a `['match', state]` entry to `SCENE.QA().states` that stages the moment (HUD values, actors, effects at the right age). `qa.mjs` then renders `frames/qa/match.png` for the fidelity critic (`critics.md` §5a).
 
 ## 5. Video references
 

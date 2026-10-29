@@ -1,5 +1,7 @@
 # Art direction for AI-generated game art
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 **The goal.** Generated pieces should assemble into a frame that reads like a shipped game, not "AI slop".
 
 **The core rule.** The image model makes the **raw paint**. Code enforces every **system rule**:

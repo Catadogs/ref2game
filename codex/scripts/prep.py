@@ -53,11 +53,11 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--all', action='store_true'); ap.add_argument('--only', default='')
     a = ap.parse_args()
     cfg = dict(DEF)
-    if os.path.exists('ref2game.json'): cfg.update(json.load(open('ref2game.json')).get('prep', {}))
+    if os.path.exists('ref2game.json'): cfg.update(json.load(open('ref2game.json', encoding='utf-8-sig')).get('prep', {}))
     os.makedirs(cfg['dst'], exist_ok=True)
     meta = {}
     if os.path.exists(cfg['manifest']):
-        try: meta = json.loads(re.sub(r'^window\.ASSETS = |;\s*$', '', open(cfg['manifest']).read().strip()))
+        try: meta = json.loads(re.sub(r'^window\.ASSETS = |;\s*$', '', open(cfg['manifest'], encoding='utf-8-sig').read().strip()))
         except Exception: meta = {}
     only = set(filter(None, a.only.split(',')))
     names = []
@@ -71,8 +71,8 @@ def main():
         if not a.all and not only and n in meta and os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(src): continue
         im, d = prep_one(src, n, cfg); im.save(dst); meta[n] = d; print(n, d)
     meta = {n: meta[n] for n in names if n in meta}                       # drop entries whose source is gone
-    open(cfg['manifest'], 'w').write('window.ASSETS = ' + json.dumps(meta) + ';\n')
-    print(f'{len(meta)} assets → {cfg["manifest"]}')
+    open(cfg['manifest'], 'w', encoding='utf-8').write('window.ASSETS = ' + json.dumps(meta) + ';\n')
+    print(f'{len(meta)} assets -> {cfg["manifest"]}')
 
 
 if __name__ == '__main__':

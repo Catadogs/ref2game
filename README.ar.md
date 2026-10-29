@@ -1,3 +1,5 @@
+> This fork modernizes the Codex edition. For current installation and behavior, see [English](README.md) or [Russian](README.ru.md). The original Arabic overview below describes the upstream workflow.
+
 <div dir="rtl">
 
 <div align="center">

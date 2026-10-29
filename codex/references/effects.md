@@ -1,5 +1,7 @@
 # Effects recipes (all in code, all deterministic)
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 The engine (`templates/live/lib.js`) already has shaders and primitives for most effects below. They are tools you can use, not the only way: write or replace a shader when the reference needs something they don't do. Effects are what make a painting read as a living game, and they must match the reference's **style**. Painterly references get soft, continuous noise; pixel art gets stepped, palette-locked versions (`styles.md`).
 
 Size every effect against the view and the actors (an actor's height, a tile, the screen), never against fixed pixels, and take its colours from the reference. Every effect is a pure function of time, its event and a seed (no `Math.random`, no `Date`), so play, `render.mjs` and `qa.mjs` see the same frame.

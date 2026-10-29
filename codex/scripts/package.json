@@ -3,5 +3,5 @@
   "private": true,
   "type": "module",
   "description": "Headless Chromium for render.mjs / livecheck.mjs",
-  "dependencies": { "playwright": "^1.47.0" }
+  "dependencies": { "playwright": "1.62.1" }
 }

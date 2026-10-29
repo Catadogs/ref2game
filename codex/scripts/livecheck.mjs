@@ -1,51 +1,109 @@
-// livecheck.mjs — play-test the live page like a player would, headless (run from the project root).
-//   node <skill>/scripts/livecheck.mjs [--keys "ArrowRight:down@0.2, Space:press@1.0, ArrowRight:up@2, Move:960x360@2.2, Click:960x360@2.5"] [--shots 0.5,1.2,2.5]
-//   (Move/Click take view pixels, e.g. 960x360 on a 1920×1080 view; Down:XxY@t moves and holds the left button, Up:_@t releases,
-//    Wheel:±1@t scrolls — hold-to-use tools, aim-and-release, hotbar wheels)
-//        [--for 4] [--url http://127.0.0.1:PORT/live/index.html] [--out frames/livecheck] [--reload] [--eval "SCENE.state.x"] [--minfps 55]
-// Clears the saved session, starts play mode with the first key, runs the timed key script (down/up/press @ seconds),
-// takes screenshots at --shots, optionally touches sim.js to prove hot-reload keeps the play state (--reload), and
-// prints one JSON line: { errors, fps, dev, evals, shots }. Exit code 2 on page errors or fps < --minfps (default 55).
-// Without --url it serves the project itself on a free port.
-import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import { createRequire } from 'node:module';
-const here = path.dirname(new URL(import.meta.url).pathname);
-const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || path.join(here, 'node_modules/playwright'));
-const args = process.argv.slice(2); const opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
-const root = process.cwd(); let srv = null, url = opt('url');
-if (!url) {
-  const types = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.json': 'application/json' };
-  srv = http.createServer((q, r) => { const f = path.join(root, decodeURIComponent(q.url.split('?')[0]));
-    fs.stat(f, (e, st) => { if (e) { r.writeHead(404); r.end(); return; }
-      r.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream', 'last-modified': st.mtime.toUTCString(), 'content-length': st.size });
-      if (q.method === 'HEAD') return r.end(); fs.createReadStream(f).pipe(r); }); });
-  await new Promise((r) => srv.listen(0, '127.0.0.1', r)); url = `http://127.0.0.1:${srv.address().port}/live/index.html`;
-}
+// Interaction checks: --scenario FILE or repeatable --assert JS; --smoke explicitly permits no assertions.
+// Legacy --keys/--shots/--eval remain available. --minfps is optional, separate from functional acceptance.
+import fs from 'node:fs'; import path from 'node:path';
+import { launchBrowser, serve, ready, fitView } from './runtime.mjs';
+const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
+const values = k => args.filter((_, i) => args[i - 1] === '--' + k);
 const out = opt('out', 'frames/livecheck'); fs.mkdirSync(out, { recursive: true });
-const browser = await chromium.launch({ args: ['--use-angle=' + (process.platform === 'darwin' ? 'metal' : 'default'), '--enable-gpu', '--ignore-gpu-blocklist'] });
-const vw = +opt('vw', 1280), p = await browser.newPage({ viewport: { width: vw, height: Math.round(vw * 9 / 16) } });   // --vw 1920: full-size shots
-const errors = []; p.on('pageerror', (e) => errors.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-await p.goto(url); await p.evaluate(() => sessionStorage.clear()); await p.reload(); await p.waitForTimeout(2500);
-const ev = []; for (const s of (opt('keys', 'ArrowRight:down@0, ArrowRight:up@1.5, Space:press@1.8')).split(',').map((x) => x.trim()).filter(Boolean)) {
-  const [k, rest] = s.split(':'); const [act, at] = rest.split('@'); ev.push({ k, act, at: +at }); }
-const shots = (opt('shots', '1,2.5')).split(',').map(Number).map((at) => ({ at, shot: true }));
-const tl = [...ev, ...shots].sort((a, b) => a.at - b.at); const t0 = Date.now(); const files = [];
-for (const e of tl) { const wait = e.at * 1000 - (Date.now() - t0); if (wait > 0) await p.waitForTimeout(wait);
-  if (e.shot) { const f = path.join(out, `play_${e.at.toFixed(2)}.png`); await p.screenshot({ path: f }); files.push(f); }
-  else if (e.k === 'Up') await p.mouse.up();
-  else if (e.k === 'Wheel') await p.mouse.wheel(0, +e.act * 100);
-  else if (e.k === 'Click' || e.k === 'Move' || e.k === 'Down') { const [vx, vy] = e.act.split('x').map(Number);             // view px → page px
-    const [x, y] = await p.evaluate(([vx, vy]) => { const r = document.getElementById('c').getBoundingClientRect(), V = (window.SIM && SIM.VIEW) || { W: 1920, H: 1080 };
-      return [r.left + vx / V.W * r.width, r.top + vy / V.H * r.height]; }, [vx, vy]);
-    if (e.k === 'Click') await p.mouse.click(x, y); else { await p.mouse.move(x, y, { steps: 8 }); if (e.k === 'Down') await p.mouse.down(); } }
-  else if (e.act === 'down') await p.keyboard.down(e.k); else if (e.act === 'up') await p.keyboard.up(e.k); else await p.keyboard.press(e.k); }
-const total = +opt('for', 0) * 1000; if (total > Date.now() - t0) await p.waitForTimeout(total - (Date.now() - t0));
-let reload = null;
-if (args.includes('--reload')) { const before = await p.evaluate(() => !!(window.SCENE && SCENE.state));
-  const f = path.join(root, 'live/sim.js'); const now = new Date(); fs.utimesSync(f, now, now); await p.waitForTimeout(3500);
-  const after = await p.evaluate(() => !!(window.SCENE && SCENE.state)); reload = { playingBefore: before, playingAfter: after }; }
-const evals = []; for (const x of args.filter((a, i) => args[i - 1] === '--eval')) evals.push(await p.evaluate((x) => { try { return JSON.stringify(eval(x)); } catch (e) { return 'ERR ' + e.message; } }, x));
-await p.waitForTimeout(1200);
-const dev = (await p.textContent('#dev').catch(() => '')) || '';
-const fps = Math.round(await p.evaluate(() => new Promise((res) => { let n = 0; const t0 = performance.now(); const f = () => { n++; if (performance.now() - t0 < 1000) requestAnimationFrame(f); else res(n * 1000 / (performance.now() - t0)); }; requestAnimationFrame(f); })));
-console.log(JSON.stringify({ errors, fps, dev, reload, evals, shots: files }));
-await browser.close(); if (srv) srv.close(); if (errors.length || fps < +opt('minfps', 55)) process.exit(2);
+const report = { errors: [], assertions: [], evals: [], shots: [], reload: null, functional: 'not_tested' };
+let browser, server;
+async function assertion(page, expression, label = expression) {
+  try {
+    await page.waitForFunction(expression => { try { return (0, eval)(expression) === true; } catch { return false; } }, expression, { timeout: +opt('timeout', 5000) });
+    report.assertions.push({ label, status: 'passed' });
+  } catch (e) { report.assertions.push({ label, status: 'failed', error: e.message }); }
+}
+async function point(page, x, y) {
+  return page.evaluate(([x, y]) => { const c = document.getElementById('c'), r = c.getBoundingClientRect(); return [r.left + x / c.width * r.width, r.top + y / c.height * r.height]; }, [x, y]);
+}
+async function action(page, a) {
+  if (a.expect !== undefined) return assertion(page, a.expect, a.label);
+  if (a.wait !== undefined) return page.waitForTimeout(a.wait);
+  if (a.key) {
+    if (!['press', 'down', 'up'].includes(a.action || 'press')) throw new Error('Unknown key action');
+    return page.keyboard[a.action || 'press'](a.key);
+  }
+  if (a.click || a.move || a.down) {
+    const [x, y] = await point(page, ...(a.click || a.move || a.down));
+    if (a.click) return page.mouse.click(x, y);
+    await page.mouse.move(x, y); if (a.down) await page.mouse.down(); return;
+  }
+  if (a.up) return page.mouse.up();
+  if (a.wheel !== undefined) return page.mouse.wheel(0, a.wheel * 100);
+  throw new Error('Unknown scenario action: ' + JSON.stringify(a));
+}
+try {
+  let url = opt('url');
+  if (!url) { server = await serve(); url = server.url + '/live/index.html'; }
+  browser = await launchBrowser();
+  const p = await browser.newPage();
+  p.on('pageerror', e => report.errors.push(e.message));
+  p.on('console', m => { if (m.type() === 'error') report.errors.push(m.text()); });
+  await p.goto(url); await p.evaluate(() => sessionStorage.clear()); await p.reload(); await ready(p);
+  report.view = await fitView(p, +opt('vw', 1280));
+  if (opt('scenario')) {
+    const scenario = JSON.parse(fs.readFileSync(opt('scenario'), 'utf8').replace(/^\uFEFF/, ''));
+    if (!Array.isArray(scenario.steps) || !scenario.steps.length) throw new Error('Scenario must have nonempty steps');
+    for (const step of scenario.steps) await action(p, step);
+  } else {
+    const events = opt('keys', 'ArrowRight:down@0, ArrowRight:up@1.5').split(',').map(s => s.trim()).filter(Boolean).map(s => {
+      const m = /^([^:]+):([^@]+)@([0-9.]+)$/.exec(s);
+      if (!m) throw new Error('Bad key timeline event: ' + s);
+      const [, key, act, at] = m; let a;
+      if (['Click', 'Move', 'Down'].includes(key)) a = { [{ Click: 'click', Move: 'move', Down: 'down' }[key]]: act.split('x').map(Number) };
+      else if (key === 'Up') a = { up: true }; else if (key === 'Wheel') a = { wheel: +act }; else a = { key, action: act };
+      return { at: +at, a };
+    });
+    const shots = opt('shots', '1,2.5').split(',').filter(Boolean).map(Number).map(at => ({ at, shot: true }));
+    const start = Date.now();
+    for (const e of [...events, ...shots].sort((a, b) => a.at - b.at)) {
+      const delay = e.at * 1000 - (Date.now() - start); if (delay > 0) await p.waitForTimeout(delay);
+      if (e.shot) { const f = path.join(out, `play_${e.at.toFixed(2)}.png`); await p.screenshot({ path: f }); report.shots.push(f); }
+      else await action(p, e.a);
+    }
+    const remaining = +opt('for', 0) * 1000 - (Date.now() - start); if (remaining > 0) await p.waitForTimeout(remaining);
+  }
+  for (const expression of values('assert')) await assertion(p, expression);
+  for (const expression of values('eval')) report.evals.push(await p.evaluate(expression => { try { return (0, eval)(expression); } catch (e) { return { error: e.message }; } }, expression));
+  if (args.includes('--reload')) {
+    if (!opt('reload-fields')) throw new Error('--reload requires --reload-fields field1,field2 (stable gameplay fields)');
+    await p.waitForFunction(() => window.__reloadWatchReady === true);
+    const paused = await p.evaluate(() => window.__REF2GAME_TEST__?.snapshot().paused);
+    if (paused === undefined) throw new Error('Reload verification needs the template snapshot hook');
+    if (!paused) await p.keyboard.press('KeyP');
+    const fields = opt('reload-fields').split(',');
+    const snapshot = () => p.evaluate(fields => {
+      if (!SCENE.state) throw new Error('No active play state');
+      const result = {};
+      for (const k of fields) { if (!(k in SCENE.state)) throw new Error('Missing reload field: ' + k); result[k] = SCENE.state[k]; }
+      return JSON.stringify(result);
+    }, fields);
+    const before = await snapshot();
+    await p.evaluate(() => { window.__reloadProbe = true; });
+    const loaded = p.waitForEvent('load', { timeout: 10000 });
+    const file = path.join(process.cwd(), 'live/sim.js'), stat = fs.statSync(file);
+    // Monotonic timestamp makes second-resolution HTTP Last-Modified change reliably.
+    fs.utimesSync(file, stat.atime, new Date(Math.max(Date.now(), stat.mtimeMs) + 2000));
+    await loaded; await ready(p);
+    const after = await snapshot(), navigation = await p.evaluate(() => window.__reloadProbe === undefined);
+    const passed = navigation && before === after;
+    report.reload = { before: JSON.parse(before), after: JSON.parse(after), navigation, status: passed ? 'passed' : 'failed' };
+    report.assertions.push({ label: 'reload preserves selected state', status: report.reload.status });
+    if (!paused) await p.keyboard.press('KeyP');
+  }
+  report.performance = await p.evaluate(() => new Promise(resolve => {
+    const intervals = []; let last = performance.now(); const start = last;
+    const frame = now => { intervals.push(now - last); last = now; if (now - start < 1000) requestAnimationFrame(frame); else { intervals.sort((a,b) => a-b); resolve({ fps: intervals.length * 1000 / (now - start), p95ms: intervals[Math.floor(intervals.length * .95)] }); } }; requestAnimationFrame(frame);
+  }));
+  if (opt('minfps') && report.performance.fps < +opt('minfps')) report.errors.push('FPS below requested threshold');
+  report.browser = browser.version();
+  report.functional = !report.assertions.length ? 'not_tested' : report.assertions.some(a => a.status === 'failed') ? 'failed' : 'passed';
+  if (!report.assertions.length && !args.includes('--smoke')) report.errors.push('No behavior assertions; provide --scenario/--assert or explicitly use --smoke');
+  const f = path.join(out, 'final.png'); await p.screenshot({ path: f }); report.shots.push(f);
+} catch (e) { report.errors.push(e.message); }
+finally {
+  if (browser) await browser.close(); if (server) await server.close();
+  report.status = report.errors.length || report.functional === 'failed' ? 'failed' : 'passed';
+  fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
+  console.log(JSON.stringify(report)); process.exitCode = report.status === 'failed' ? 2 : 0;
+}

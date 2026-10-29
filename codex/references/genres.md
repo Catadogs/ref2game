@@ -1,10 +1,12 @@
 # Genre notes for 2D game slices
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 Background notes per game family: camera, layers, sim, interactions, what makes each family feel alive. Once you know the family (from the picture, or from the user's answer when the picture doesn't settle it), read its block. §14 covers tiles and §15 directional characters. These blocks are a menu of concerns, not recipes: the reference and the play feel decide the values.
 
 - Linked games illustrate how one shipped title solved a problem. Read the source for its numbers; don't copy them as targets.
 - Frame counts cited from shipped games are at 60 Hz. The sim runs at 120 Hz (`DT = 1/120`), so convert frame counts to seconds; never count sim ticks.
-- **Starting bases** (`setup.sh --genre`):
+- **Starting bases** (`setup.py --genre`):
   - `side`: walk lines, parallax bands, grass, wind, a rig;
   - `top`: an 8-direction mover with dash, circle colliders, y-sorting, fading canopies, cloud shadows, fleeing critters;
   - `blank`: an empty stage with pointer and keyboard input, hover/press springs on hotspots, a scripted attract cursor.
@@ -51,7 +53,7 @@ Block keys:
 - **Art**: terrain is material textures plus autotile or splat (§14). Buildings: a modular wall kit (front face, top cap, corner), or one painted set piece with a separate roof layer. Eastward cuts each pixel asset into parts and hand-paints a bump map per part for real-time lighting.
 - **Data**: terrain-ID grid, collision grid (plus a height layer for cliffs), props with a footprint and a sort origin, triggers and doors.
 - **Views**: 4-dir = 3 drawn (down, up, side) + mirror. 8-dir = 5 drawn (S, SE, E, NE, N) + 3 mirrored. Few drawings can carry a walk: Stardew's farmer loops a handful, with left and right sharing frames. Don't Starve plays flat 2D animation as billboards under a perspective camera.
-- **Get**: the views must be one character. Generate them together (a turnaround) or from one anchor (§15), slice, and rig each view; rigs share part names and timing so every action transfers across views.
+- **Get**: the views must be one character. Generate them together (a turnaround) or from one anchor (§15), slice, and animate each view with sprite frames or rigs as appropriate; keep timing and identity consistent across views.
 - **Sim**: 8-way normalised input with acceleration, quick enough to feel direct. A circle or feet-AABB against the grid; slide along walls. Nudge the player around corners when they almost fit a gap. Knockback impulse along the hit normal, then i-frames with flicker, long enough to escape a crowd but not to ignore it.
 - **Alive**: 1) Grass parts around the feet and can be cut (clippings, drops); 2) Bushes rustle on overlap; 3) Footprints and dust, by surface; 4) Push blocks move after a sustained push, so brushing one doesn't shift it; 5) NPCs turn their heads toward the player within a radius; 6) Shallow-water ripples; 7) Birds and butterflies flee; 8) Torch light pools flicker.
 - **LD**: dungeons as lock/key graphs with loops; one item per dungeon, reused in its own puzzles (GMTK's Boss Keys method). Give every screen a landmark. Show the goal before the player can reach it.

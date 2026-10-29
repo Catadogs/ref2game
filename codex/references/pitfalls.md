@@ -1,5 +1,7 @@
 # Pitfalls and speed rules
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 Each entry is a class of defect that cost real time: what it looks like, why it happens, the principle of the fix, and how to catch it. The fix is a principle, not the only way; find the best one for this project.
 
 ## Where the time goes, and how not to lose it
@@ -28,7 +30,7 @@ Each entry is a class of defect that cost real time: what it looks like, why it 
 - **A cut edge shows.** A piece cropped by its canvas (the top of a hanging element) is placed where its cut edge is visible and seems to float. Anchor cut edges inside an occluder and draw them behind it. *Detect:* stills at both camera extremes.
 
 **Rendering**
-- **WebGL can't load images from file://.** Always serve over http (`serve.sh`, or the tools' built-in servers). If a port is taken, pick the next free one.
+- **WebGL can't load images from file://.** Always serve over http (`serve.mjs`, or the tools' built-in servers). Let the server bind a free port and print the URL after success.
 - **A custom draw path skips state the shared path sets.** A sprite drawn outside `L.sprite()` without its sub-rect uniform (`u_src`) shows the wrong region of the atlas (a whole part squeezed into another's rect). Go through the library, or set every uniform it sets.
 - **Hairlines or black specks at quad edges.** A shader function got an argument outside its domain (`pow` of a negative base, a divide by zero, `sqrt` of a negative) and produced NaN, usually on padded edges. Clamp inputs to the valid domain. *Detect:* magnified stills; bisect layers with `?only=`.
 - **A faint box around atlas sprites at minified scales.** Texture sampling inside a branch or after an early return leaves the mip derivatives undefined at the quad's border, so a coarse mip is sampled and neighbouring atlas sprites bleed in. Derivatives must come from uniform control flow: compute them (or sample) before any branch, then mask. Padding alone never fixes it. *Detect:* magnified stills on a contrasting background at every zoom the game uses.
@@ -64,7 +66,7 @@ Each entry is a class of defect that cost real time: what it looks like, why it 
 - **Code-drawn add-ons didn't match the art** (a code-drawn body part on a painted character) and were rejected. Match the rendering exactly (outline, shading, texture density), or cut them. *Detect:* polish checklist items 1–3.
 
 **Rigs and motion**
-- **Fake animation.** Only the player was animated; NPCs "worked" by tilting the whole sprite, a worker turned away from their station to face the player, animals only swayed, nobody walked, and squash pulses alone read as no animation at all. Every actor in the animation list gets a rig with real joints (`animation.md` §12–13): articulated limbs, follow-through, workers facing their station, some NPCs walking routines. *Detect:* `qa.mjs` fails rigid-only motion and listed actors without a loop; the motion critic.
+- **Fake animation.** Only the player was animated; NPCs "worked" by tilting the whole sprite, a worker turned away from their station to face the player, animals only swayed, nobody walked, and squash pulses alone read as no animation at all. Every actor assigned an articulated rig in the animation plan gets real joints (`animation.md` §12–13): articulated limbs, follow-through, workers facing their station, some NPCs walking routines. *Detect:* `qa.mjs` fails rigid-only motion and listed actors without a loop; the motion critic.
 - **Checks too weak to see rig defects.** A limp, feet in the ground, a weapon pointing away at the hit and popping deaths passed a glance at stills plus one limb-motion number. Rigs report their joints and `qa.mjs` measures them on every change (`animation.md` §14); every defect a viewer finds that the numbers missed becomes a new check.
 - **Walkers glided or only bobbed, limb parts didn't match the approved drawing, a held item sat on the wrong layer.** `animation.md` §11–12. *Detect:* the `qa.mjs` motion check (aligned on the upper body, so a bob can't fake it) and the motion critic on the cycle sheets.
 - **An unriggable source drawing.** A walker generated mid-stride and split at the hips can only translate its halves: legs slide over each other and clothing travels with them. Generate actors in a rig pose (limbs separated, clear gaps between legs, hems and sleeves clear of the joints) and in the views the movement needs (a turnaround, so moving away shows the back). Measure joints from the alpha, never hand-tune per sprite.
@@ -84,9 +86,9 @@ Each entry is a class of defect that cost real time: what it looks like, why it 
 
 ## Definition of done (Gate B and final delivery)
 
-- [ ] `qa.mjs` passes (every HUD state at worst-case strings, every emitter anchor, every walk cycle, and the measured rig checks for every actor in the animation list: foot slide, ground, lift, limp, stride, knee, stretch, stance, arm phase, rigid-only motion, aim at the impact, pops, coverage; every time-driven effect moving and every state change free of sweeps).
+- [ ] `qa.mjs` passes (every HUD state at worst-case strings, every emitter anchor, every walk cycle, and the measured rig checks for actors assigned articulated rigs: foot slide, ground, lift, limp, stride, knee, stretch, stance, arm phase, rigid-only motion, aim at the impact, pops, coverage; every time-driven effect moving and every state change free of sweeps).
 - [ ] The polish checklist (`critics.md` §0) passed in the frame and game critics.
-- [ ] The live page loads with 0 errors and holds 60 fps (`livecheck.mjs` fails below `--minfps`, default 55); hot reload keeps play state.
+- [ ] The live page loads without errors and passes its behavior scenarios. Apply `--minfps` only for an agreed performance target; verify hot reload with explicit state fields.
 - [ ] `tune.cjs` passes: the attract demo reaches its beats and shows the key interactions.
 - [ ] Every asset passed its asset critic; every module passed its module critic (≤ 3 rounds, leftovers listed).
 - [ ] The frame, fidelity and game critics ran on the current build; scores are reported.

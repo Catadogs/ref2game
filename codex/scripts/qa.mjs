@@ -29,38 +29,58 @@
 //              frames with that state fixed], box? } }: fails when the change makes frames differ much more than at steady
 //              state (the picture sweeps or strobes, e.g. a phase computed as rate(state) · t instead of integrated over time).
 // Writes <out>/<state>.png, <out>/cycle_<name>.png and <out>/report.json.
-import http from 'node:http'; import fs from 'node:fs'; import path from 'node:path'; import { createRequire } from 'node:module';
-const here = path.dirname(new URL(import.meta.url).pathname);
-const { chromium } = createRequire(import.meta.url)(process.env.PLAYWRIGHT || path.join(here, 'node_modules/playwright'));
+import fs from 'node:fs'; import path from 'node:path';
+import { launchBrowser, serve, ready, fitView } from './runtime.mjs';
 const args = process.argv.slice(2), opt = (k, d) => { const i = args.indexOf('--' + k); return i >= 0 ? args[i + 1] : d; };
 const out = opt('out', 'frames/qa'), only = opt('only', 'ui,anchors,motion,rig,anim').split(','); fs.mkdirSync(out, { recursive: true });
-const root = process.cwd(), types = { '.html': 'text/html', '.js': 'text/javascript', '.png': 'image/png', '.json': 'application/json' };
-const srv = http.createServer((q, r) => { const f = path.join(root, decodeURIComponent(q.url.split('?')[0]));
-  fs.stat(f, (e, st) => { if (e) { r.writeHead(404); r.end(); return; } r.writeHead(200, { 'content-type': types[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(r); }); });
-await new Promise((r) => srv.listen(0, '127.0.0.1', r));
-const browser = await chromium.launch({ args: ['--use-angle=' + (process.platform === 'darwin' ? 'metal' : 'default'), '--enable-gpu', '--ignore-gpu-blocklist'] });
-const p = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-const errors = []; p.on('pageerror', (e) => errors.push(e.message)); p.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-await p.goto(`http://127.0.0.1:${srv.address().port}/live/index.html?render=1`);
-await p.waitForFunction(() => window.__ready, null, { timeout: 30000 });
-const hasQA = await p.evaluate(() => typeof SCENE.QA === 'function');
-const fails = [], warns = [], report = { states: {}, cycles: {} };
-if (!hasQA) fails.push('SCENE.QA() missing: the scene must list its HUD states and walk cycles (references/engine.md §7, "QA hooks")');
+const fails = [], warns = [], errors = [], report = { states: {}, cycles: {}, coverage: {} };
+const categories = ['states', 'match', 'ui', 'anchors', 'motion', 'rig', 'anim'];
+let browser, server;
+try {
+const cfg = fs.existsSync('ref2game.json') ? JSON.parse(fs.readFileSync('ref2game.json', 'utf8').replace(/^\uFEFF/, '')) : {};
+const required = new Set(['states', ...(cfg.qa?.required || []), ...opt('require', '').split(',').filter(Boolean)]);
+if (cfg.fidelity === 'exact') required.add('match');
+const na = new Set(cfg.qa?.not_applicable || []);
+for (const c of [...required, ...na, ...only]) if (!categories.includes(c)) throw new Error('Unknown QA category: ' + c);
+for (const c of na) if (required.has(c)) throw new Error('QA category is both required and not applicable: ' + c);
+for (let i = only.length - 1; i >= 0; i--) if (na.has(only[i])) only.splice(i, 1);
+server = await serve(); browser = await launchBrowser();
+const p = await browser.newPage();
+p.on('pageerror', e => errors.push(e.message)); p.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
+await p.goto(`${server.url}/live/index.html?render=1`); await ready(p);
+report.view = await fitView(p);
+const schema = await p.evaluate(() => {
+  if (typeof window.SCENE?.QA !== 'function') return 'SCENE.QA() is missing';
+  window.__QA = SCENE.QA();
+  const Q = window.__QA;
+  if (!Array.isArray(Q.states) || !Q.states.length) return 'SCENE.QA().states must contain at least one state';
+  const seen = new Set();
+  for (const row of Q.states) {
+    if (!Array.isArray(row) || row.length !== 2 || !/^[A-Za-z0-9_-]+$/.test(row[0]) || seen.has(row[0]) || !row[1] || !Number.isFinite(row[1].t)) return 'Invalid or duplicate QA state (safe name and finite state.t required)';
+    seen.add(row[0]);
+  }
+  for (const kind of ['cycles', 'loops', 'transitions']) for (const [name, frames] of Object.entries(Q[kind] || {})) {
+    if (!/^[A-Za-z0-9_-]+$/.test(name) || !Array.isArray(frames) || frames.length < 2) return 'Invalid QA sequence: ' + name;
+  }
+  return null;
+});
+if (schema) throw new Error(schema);
+const hasQA = true;
 const save = (f, url) => fs.writeFileSync(f, Buffer.from(url.split(',')[1], 'base64'));
 
 if (hasQA) {
   // ---- HUD states: layout + anchors ----
-  const names = await p.evaluate(() => { window.__QA = SCENE.QA(); return window.__QA.states.map((s) => s[0]); });
+  const names = await p.evaluate(() => { return window.__QA.states.map((s) => s[0]); });
   for (let i = 0; i < names.length; i++) {
     const r = await p.evaluate((i) => { const [, st] = window.__QA.states[i]; SCENE.state = st;
       try { SCENE.render(st.t + 0.01); } catch (e) { return { err: e.message + ' @ ' + (e.stack || '').split('\n')[1] }; }
-      return { url: document.getElementById('c').toDataURL('image/png'), ui: window.__UI || [], an: window.__ANCHORS || [] }; }, i);
-    const name = names[i]; if (r.err) { fails.push(`${name}: render threw ${r.err}`); continue; } save(path.join(out, name + '.png'), r.url); report.states[name] = { ui: r.ui.length, anchors: r.an };
+      return { width: document.getElementById('c').width, height: document.getElementById('c').height, url: document.getElementById('c').toDataURL('image/png'), ui: window.__UI || [], an: window.__ANCHORS || [] }; }, i);
+    const name = names[i]; if (r.err) { fails.push(`${name}: render threw ${r.err}`); continue; } save(path.join(out, name + '.png'), r.url); report.states[name] = { ui: r.ui.filter(u => u.k === 'text').length, anchors: r.an };
     if (only.includes('ui')) {
       const texts = r.ui.filter((u) => u.k === 'text'), boxes = r.ui.filter((u) => u.k === 'box');
       if (!r.ui.length) warns.push(`${name}: no __UI records (HUD text is not checked)`);
       for (const t of texts) {
-        if (t.x < 0 || t.y < 0 || t.x + t.w > 1920 || t.y + t.h > 1080) fails.push(`${name}: text "${t.s}" leaves the screen`);
+        if (t.x < 0 || t.y < 0 || t.x + t.w > r.width || t.y + t.h > r.height) fails.push(`${name}: text "${t.s}" leaves the screen`);
         const cxy = [t.x + t.w / 2, t.y + t.h / 2], inb = boxes.filter((b) => cxy[0] >= b.x && cxy[0] <= b.x + b.w && cxy[1] >= b.y && cxy[1] <= b.y + b.h);
         if (!inb.length) { warns.push(`${name}: text "${t.s}" has no container`); continue; }
         const b = inb.sort((a, c) => a.w * a.h - c.w * c.h)[0], pad = b.pad || 0;
@@ -123,7 +143,7 @@ if (hasQA) {
   }
   // ---- rig checks from the joint trace (animation.md §14) ----
   if (only.includes('rig')) {
-    const meta = await p.evaluate(() => { const Q = window.__QA; return { has: typeof LIB.joint === 'function', subject: Q.subject || {}, cycles: Object.keys(Q.cycles || {}),
+    const meta = await p.evaluate(() => { const Q = window.__QA; return { has: typeof window.LIB?.joint === 'function', subject: Q.subject || {}, cycles: Object.keys(Q.cycles || {}),
       loops: Object.keys(Q.loops || {}), cycleT: Q.cycleT || {}, rest: Object.keys(Q.rest || {}), attacks: Object.keys(Q.attacks || {}), transitions: Object.keys(Q.transitions || {}), actors: Q.actors || [] }; });
     if (!meta.has) warns.push('lib.js has no L.joint: rig checks skipped (animation.md §14)');
     else {
@@ -267,8 +287,29 @@ if (hasQA && only.includes('anim')) {
     if (r.m > 1.25 * s.m + 0.02) fails.push(`${name}: while the state changes, frames differ ${(r.m / Math.max(1e-6, s.m)).toFixed(2)}× as much as at steady state (max 1.25×): something sweeps or strobes — a rate that follows the state, multiplied by absolute time, jumps the phase; integrate it over time instead`); }
   if (!meta.anim.length && !meta.ramps.length) warns.push('SCENE.QA() has no anim / ramps: time-driven effects (weather, water, fire, scrolling fog) are not checked for freezing or sweeping');
 }
-if (errors.length) fails.push(...errors.map((e) => 'page error: ' + e));
-report.fails = fails; report.warns = warns; fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 1));
-for (const w of warns) console.log('WARN', w); for (const f of fails) console.log('FAIL', f);
-console.log(fails.length ? `qa: ${fails.length} failure(s), see ${out}/` : `qa: ok (${Object.keys(report.states).length} states, ${Object.keys(report.cycles).length} cycles) → ${out}/`);
-await browser.close(); srv.close(); process.exit(fails.length ? 2 : 0);
+const count = {
+  states: Object.keys(report.states).length,
+  match: Object.hasOwn(report.states, 'match') ? 1 : 0,
+  ui: Object.values(report.states).reduce((n, s) => n + s.ui, 0),
+  anchors: Object.values(report.states).reduce((n, s) => n + s.anchors.length, 0),
+  motion: Object.keys(report.cycles).length,
+  rig: Object.keys(report.rig || {}).length,
+  anim: Object.keys(report.anim || {}).length,
+};
+for (const c of categories) {
+  const selected = ['states', 'match'].includes(c) || only.includes(c);
+  const incomplete = warns.some(w => (c === 'ui' && /no __UI|no container/.test(w)) || (c === 'rig' && /skipped|not measured|no joints/.test(w)) || (c === 'motion' && /not given/.test(w)) || (c === 'anim' && /at least 2/.test(w)));
+  report.coverage[c] = { status: na.has(c) ? 'not_applicable' : !selected || !count[c] || incomplete ? 'not_tested' : 'passed', count: count[c] };
+  if (required.has(c) && report.coverage[c].status !== 'passed') fails.push(`required QA coverage missing or incomplete: ${c}`);
+}
+} catch (e) { fails.push(e.message); }
+finally {
+  if (errors.length) fails.push(...errors.map(e => 'page error: ' + e));
+  if (fails.length) for (const c of Object.values(report.coverage)) if (c.status === 'passed') c.status = 'failed';
+  report.status = fails.length ? 'failed' : 'passed';
+  report.fails = fails; report.warns = warns;
+  fs.writeFileSync(path.join(out, 'report.json'), JSON.stringify(report, null, 2));
+  for (const w of warns) console.log('WARN', w); for (const f of fails) console.log('FAIL', f);
+  console.log(fails.length ? `qa: ${fails.length} failure(s), see ${out}/` : `qa: ok (${Object.keys(report.states).length} states, ${Object.keys(report.cycles).length} cycles); see coverage in ${out}/report.json`);
+  if (browser) await browser.close(); if (server) await server.close(); process.exitCode = fails.length ? 2 : 0;
+}

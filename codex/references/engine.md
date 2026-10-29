@@ -1,5 +1,7 @@
 # The live engine (templates/live): files, API, contracts, the live-preview loop
 
+Scope: apply only the techniques and acceptance criteria selected in PLAN.md. Assets-only work does not need a playable scene; exact composition matching applies only to `fidelity: exact`. The browser-specific commands support the bundled WebGL2 engine. See SKILL.md and validation.md for mode selection and coverage.
+
 A tiny WebGL2 renderer, a deterministic sim and a scene file that is a pure function of time and state. It runs in the browser with no build step and no dependencies. Its job is to make the game look shipped and alive, fast, in a page the user watches while you work.
 
 ## Contents
@@ -21,7 +23,7 @@ A tiny WebGL2 renderer, a deterministic sim and a scene file that is a pure func
 | File | Owns | Changes per project? |
 |---|---|---|
 | `live/index.html` | Loading (cache-busted), canvas (aspect from `SIM.VIEW`), hint (`SIM.HINT`), attract vs play, input (keys + pointer), respawn, dev keys, hot-reload polling, sessionStorage state | Rarely: key bindings |
-| `live/gl.js` | WebGL2 context, premultiplied textures (mipmapped, or nearest), programs (with COMMON: hash, vnoise, fbm, scr), float render targets, blend modes, affine quads | No (`setup.sh --refresh-engine` updates it) |
+| `live/gl.js` | WebGL2 context, premultiplied textures (mipmapped, or nearest), programs (with COMMON: hash, vnoise, fbm, scr), float render targets, blend modes, affine quads | No (`setup.py --refresh-engine` updates it) |
 | `live/lib.js` | Shader library, `sprite()`, passes (shadow, ink), primitives (glow, shadow, puff, star, ring, fog), rig helper, glyph text, the frame pipeline | Add shaders through `L.init(w, h, extra)`; edit lib only for engine-wide fixes |
 | `live/sim.js` | Everything that **happens**: movement, collisions, level data, pickups, hazards, critters, reactive props, springs, wind, camera, events | Yes, it is the game |
 | `live/scene.js` | Everything that is **drawn**: layer plan, parallax, placement, rig poses, FX from events, HUD | Yes, it is the look |
@@ -30,11 +32,11 @@ A tiny WebGL2 renderer, a deterministic sim and a scene file that is a pure func
 
 ## 2. The live-preview loop (how we work)
 
-The user watches `http://127.0.0.1:<port>/live/index.html`. Start it with `bash <skill>/scripts/serve.sh` in the background. The page polls its sources every 700 ms and reloads itself on change, keeping play state, speed and pause. **Every change you make shows up there within a second.**
+The user watches `http://127.0.0.1:<port>/live/index.html`. Start it with `node "<skill>/scripts/serve.mjs"` in the background. The page polls its sources every 700 ms and reloads itself on change, keeping play state, speed and pause. Changes are picked up by polling after successful reload; verify the result rather than promising a fixed latency.
 
 Rules:
 - **Keep the page green.**
-  - After every edit batch, run `node <skill>/scripts/livecheck.mjs`. It must report 0 errors and fps ≥ `--minfps` (default 55).
+  - After relevant behavior changes, run `node "<skill>/scripts/livecheck.mjs" --scenario study/playcheck.json`. Require passing assertions and no page errors; use `--minfps` only for an explicit performance target.
   - A syntax error shows a red stack on the page. Polling continues, so the fix reloads by itself, but don't leave it broken.
 - **Look at it yourself the way the user does.**
   - `render.mjs stills` at the key beats, or `livecheck.mjs --shots` in play mode.
@@ -185,7 +187,7 @@ W and H come from `SIM.VIEW`, never literals.
 **Display size vs texture size.** Draw sprites at sizes from `window.SIZES` (`live/sizes.js`: name → [w, h] in view px), never at `texture size × k`. Hi-res sources then stay hi-res (mipmapped, smooth) while the game scale stays fixed, and regenerating an asset at another resolution doesn't change its size in the game. Write `sizes.js` from the art scale you chose (px per art pixel, or a fixed height), not by hand.
 
 **QA hooks (read by `scripts/qa.mjs`; lib.js resets them in `beginBG`).**
-- `SCENE.QA()` returns `{ states, cycles, sprites, box }` (`states` always includes `['match', state]`: the reference's composition restaged, `study.md` §4.7):
+- `SCENE.QA()` returns `{ states, cycles, sprites, box }` (`states` includes `['match', state]` when fidelity is `exact`: the reference's composition restaged, `study.md` §4.7):
   - `states`: `[[name, simState], …]` covering **every HUD screen** (start, every toast/tip kind, low-resource warnings, pause, results/game over…) filled with **worst-case values** (longest strings, largest counts), plus every held/aimed tool in every facing at its straight-ahead **and extreme** aim angles (so anchors and stills cover the diagonals, not just the easy case);
   - `cycles`: `{ name: [simState, …] }` per walking actor and view, the same state at successive gait distances over a full cycle (and one with the tool aimed);
   - `sprites`: `{ cycleName: [texture names the actor is drawn from] }`, so the motion check isolates the actor;
@@ -237,7 +239,7 @@ All run from the project root.
 - `node <skill>/scripts/render.mjs stills 0,1.5,3 --out frames/check [--q "fx=0"]` makes offline stills. Use it for checking beats, crops and sheets.
 - `node <skill>/scripts/render.mjs video --to 14 --fps 30 --jobs 4 --out frames/film.mp4` renders a video only when the user wants one; the live page is the main deliverable.
 - `node <skill>/scripts/qa.mjs` renders every `SCENE.QA()` state and cycle in `?render=1` mode and fails (exit 2) on text outside its container or the screen, overlapping texts, emitters drawn more than `tol` px from where the sim emits, and walk cycles whose lower body doesn't change once frames are aligned on the upper body (a sliding sprite). It writes `frames/qa/<state>.png`, `cycle_<name>.png` (for the motion critic) and `report.json`. Mutation-tested: it catches fixed-size panels with variable text, effects emitted from the actor's ground point, and frozen limbs under a body bob.
-- `node <skill>/scripts/livecheck.mjs --keys "ArrowRight:down@0, Space:press@0.9, Click:960x360@1.2" --shots 1,2 --reload --eval "SCENE.state.x"` plays the game like a user (`Move`/`Click` take view px). Exit 2 means errors or fps < `--minfps` (55).
+- `node "<skill>/scripts/livecheck.mjs" --scenario study/playcheck.json` verifies gameplay assertions. `Move`/`Click` use game pixels. `--reload --reload-fields x,y` additionally checks stable fields across reload; choose actual fields for the game. `--eval` is diagnostic only, and `--minfps` is optional. See validation.md for exit and coverage rules.
 - `node live/tune.cjs [path]` prints the attract route events; exit 1 if `SIM.demoCheck` fails, or (without it) not all pickups are collected.
 - `python3 <skill>/scripts/sheet.py out.png frames/check/*.png --crop x0,y0,x1,y1 --cols 6 --label` makes cycle sheets and frame-by-frame checks.
 
